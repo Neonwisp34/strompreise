@@ -74,7 +74,7 @@ def page(title, desc, body, path, schema=None):
     return f"""<!doctype html><html lang="de-CH"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)}</title><meta name="description" content="{esc(desc)}"><link rel="canonical" href="{esc(url)}">
 <style>{CSS}</style>{ld}</head><body><div class="w"><nav><a href="{BASE}/">Strompreise Schweiz</a></nav><main>{body}</main>
-<footer>Quelle: Eidgenössische Elektrizitätskommission ElCom, Open Government Data (opendata.swiss). Tarife der ElCom-Haushaltskategorie H4 (4'500 kWh pro Jahr), Standardprodukt des Netzbetreibers, in Rappen pro kWh, wie von der ElCom ausgewiesen. Zur Mehrwertsteuer macht dieser Datensatz keine Angabe; massgebend ist die Tarifinformation Ihres Netzbetreibers. Die Jahreskosten sind eine Schätzung (Preis × 4'500 kWh). Unabhängige Seite, keine Verbindung zur ElCom oder zu einem Netzbetreiber. Daten: {CUR}, Seite erstellt am {date.today():%d.%m.%Y}.</footer></div></body></html>"""
+<footer>Quelle: Eidgenössische Elektrizitätskommission ElCom, Open Government Data (opendata.swiss). Tarife der ElCom-Haushaltskategorie H4 (4'500 kWh pro Jahr), Standardprodukt des Netzbetreibers, in Rappen pro kWh, wie von der ElCom ausgewiesen. Zur Mehrwertsteuer macht dieser Datensatz keine Angabe; massgebend ist die Tarifinformation Ihres Netzbetreibers. Die Jahreskosten sind eine Schätzung (Preis × 4'500 kWh). Unabhängige Seite, keine Verbindung zur ElCom oder zu einem Netzbetreiber. Datenstand: Tarife {CUR}.</footer></div></body></html>"""
 
 def chart(points):
     if len(points) < 2: return ""
