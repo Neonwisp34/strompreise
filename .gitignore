@@ -1,0 +1,4 @@
+data/
+qa_report.md
+__pycache__/
+*.pyc
