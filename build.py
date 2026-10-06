@@ -115,9 +115,9 @@ def page(title, desc, body, path, schemas=()):
     return f"""<!doctype html><html lang="de-CH"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)}</title><meta name="description" content="{esc(desc)}"><link rel="canonical" href="{esc(url)}">
 {GSC if path == "" else ""}<meta property="og:title" content="{esc(title)}"><meta property="og:description" content="{esc(desc)}"><meta property="og:type" content="website"><meta property="og:url" content="{esc(url)}"><meta property="og:locale" content="de_CH"><meta name="twitter:card" content="summary">
-<style>{CSS}</style>{ld}</head><body><header class="top"><div><a href="{BASE}/" style="display:flex;align-items:center;gap:.6rem"><span class="logo" aria-hidden="true"></span>Strompreis-Monitor</a></div></header>
+<style>{CSS}</style>{ld}</head><body><header class="top"><div><a href="{BASE}/" style="display:flex;align-items:center;gap:.6rem"><span class="logo" aria-hidden="true"></span>Strompreislupe</a></div></header>
 <div class="w"><main>{body}</main>
-<footer>Quelle: Eidgenössische Elektrizitätskommission ElCom, Open Government Data (opendata.swiss). Tarife der ElCom-Haushaltskategorie H4 (4'500 kWh pro Jahr), Standardprodukt des Netzbetreibers, in Rappen pro kWh, wie von der ElCom ausgewiesen. Zur Mehrwertsteuer macht dieser Datensatz keine Angabe; massgebend ist die Tarifinformation Ihres Netzbetreibers. Kosten sind Schätzungen (Preis × Verbrauch), Alltagswerte grobe Richtwerte. Strompreis-Monitor ist eine unabhängige Seite ohne Verbindung zur ElCom oder zu einem Netzbetreiber. Datenstand: Tarife {CUR}.</footer></div></body></html>"""
+<footer>Quelle: Eidgenössische Elektrizitätskommission ElCom, Open Government Data (opendata.swiss). Tarife der ElCom-Haushaltskategorie H4 (4'500 kWh pro Jahr), Standardprodukt des Netzbetreibers, in Rappen pro kWh, wie von der ElCom ausgewiesen. Zur Mehrwertsteuer macht dieser Datensatz keine Angabe; massgebend ist die Tarifinformation Ihres Netzbetreibers. Kosten sind Schätzungen (Preis × Verbrauch), Alltagswerte grobe Richtwerte. Strompreislupe ist eine unabhängige Seite ohne Verbindung zur ElCom oder zu einem Netzbetreiber. Datenstand: Tarife {CUR}.</footer></div></body></html>"""
 
 # ---------- charts ----------
 def chart(series, med):
@@ -302,7 +302,7 @@ body = f"""<h1>Was kostet Strom in Ihrer Gemeinde?</h1>
 <div><h2 style="margin-top:0">Die höchsten Preise {CUR}</h2><div class="card">{rank_list(srt[::-1], {x['id']: rank_ch[x['id']] for x in srt}, 12)}</div></div></div>
 <script>const I={json.dumps([[x['name'], x['canton'], x['slug'], ' '.join(x['plz'])] for x in sorted(rec.values(), key=lambda x: x['name'])], ensure_ascii=False)};
 const q=document.getElementById('q'),r=document.getElementById('r');q.addEventListener('input',()=>{{const t=q.value.trim().toLowerCase();r.innerHTML='';if(t.length<2)return;I.filter(i=>(i[0]+' '+i[3]).toLowerCase().includes(t)).slice(0,30).forEach(i=>{{const l=document.createElement('li'),a=document.createElement('a');a.href='{BASE}/gemeinde/'+i[2]+'/';a.textContent=i[0]+' ('+i[1]+')';l.appendChild(a);r.appendChild(l)}})}})</script>"""
-pages["index.html"] = page(f"Strompreis-Monitor: Strompreise {CUR} aller Schweizer Gemeinden", f"Strompreis pro Gemeinde {CUR}: offizielle ElCom-Tarife für {N} Schweizer Gemeinden, mit Vergleich, Verlauf und Stromkosten-Rechner. Median {fmt(CH_MED)} Rp./kWh.", body, "")
+pages["index.html"] = page(f"Strompreislupe: Strompreise {CUR} aller Schweizer Gemeinden", f"Strompreis pro Gemeinde {CUR}: offizielle ElCom-Tarife für {N} Schweizer Gemeinden, mit Vergleich, Verlauf und Stromkosten-Rechner. Median {fmt(CH_MED)} Rp./kWh.", body, "")
 
 # ---------- write ----------
 if os.path.isdir(OUT): shutil.rmtree(OUT)
