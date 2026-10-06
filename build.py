@@ -107,12 +107,14 @@ details{border-bottom:1px solid var(--line);padding:.8rem 0}summary{cursor:point
 footer{margin-top:3rem;padding-top:1.2rem;border-top:2px solid var(--fg);font-size:.82rem;color:var(--mut)}
 .price,.tile .v,.out .v,h1,h2{font-variant-numeric:lining-nums}svg text{font-family:inherit}.note{font-size:.86rem;color:var(--mut)}"""
 
+GSC = '<meta name="google-site-verification" content="RTeH9c9V1LuksTyF5yz_M5L9cz1En0C2d7PBphOJKzI" />'
+
 def page(title, desc, body, path, schemas=()):
     url = SITE + f"{BASE}/{path}".replace("//", "/")
     ld = "".join(f'<script type="application/ld+json">{json.dumps(s, ensure_ascii=False)}</script>' for s in schemas)
     return f"""<!doctype html><html lang="de-CH"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)}</title><meta name="description" content="{esc(desc)}"><link rel="canonical" href="{esc(url)}">
-<meta property="og:title" content="{esc(title)}"><meta property="og:description" content="{esc(desc)}"><meta property="og:type" content="website"><meta property="og:url" content="{esc(url)}"><meta property="og:locale" content="de_CH"><meta name="twitter:card" content="summary">
+{GSC if path == "" else ""}<meta property="og:title" content="{esc(title)}"><meta property="og:description" content="{esc(desc)}"><meta property="og:type" content="website"><meta property="og:url" content="{esc(url)}"><meta property="og:locale" content="de_CH"><meta name="twitter:card" content="summary">
 <style>{CSS}</style>{ld}</head><body><header class="top"><div><a href="{BASE}/" style="display:flex;align-items:center;gap:.6rem"><span class="logo" aria-hidden="true"></span>Strompreis-Monitor</a></div></header>
 <div class="w"><main>{body}</main>
 <footer>Quelle: Eidgenössische Elektrizitätskommission ElCom, Open Government Data (opendata.swiss). Tarife der ElCom-Haushaltskategorie H4 (4'500 kWh pro Jahr), Standardprodukt des Netzbetreibers, in Rappen pro kWh, wie von der ElCom ausgewiesen. Zur Mehrwertsteuer macht dieser Datensatz keine Angabe; massgebend ist die Tarifinformation Ihres Netzbetreibers. Kosten sind Schätzungen (Preis × Verbrauch), Alltagswerte grobe Richtwerte. Strompreis-Monitor ist eine unabhängige Seite ohne Verbindung zur ElCom oder zu einem Netzbetreiber. Datenstand: Tarife {CUR}.</footer></div></body></html>"""
