@@ -356,6 +356,7 @@ body = f"""<h1>Was kostet Strom in Ihrer Gemeinde?</h1>
 <div class="tile"><div class="k">Günstigster Preis</div><div class="v">{fmt(srt[0]['cur']['total'])}</div><div class="s">{esc(srt[0]['name'])} ({esc(srt[0]['canton'])})</div></div>
 <div class="tile"><div class="k">Höchster Preis</div><div class="v">{fmt(srt[-1]['cur']['total'])}</div><div class="s">{esc(srt[-1]['name'])} ({esc(srt[-1]['canton'])})</div></div>
 <div class="tile"><div class="k">Preisspanne</div><div class="v">{srt[-1]['cur']['total'] / srt[0]['cur']['total']:.1f}×</div><div class="s">teuerste zu günstigste Gemeinde</div></div></div>
+<!--SPOTLINK-->
 <h2>Nach Kanton</h2><ul class="grid">{chips}</ul>
 <div class="hero" style="margin-top:2rem"><div><h2 style="margin-top:0">Die günstigsten Preise {CUR}</h2><div class="card">{rank_list(srt, rank_ch, 12)}</div></div>
 <div><h2 style="margin-top:0">Die höchsten Preise {CUR}</h2><div class="card">{rank_list(srt[::-1], {x['id']: rank_ch[x['id']] for x in srt}, 12)}</div></div></div>
@@ -363,6 +364,65 @@ body = f"""<h1>Was kostet Strom in Ihrer Gemeinde?</h1>
 const Z={json.dumps({z: (f'{len(rs)} Gemeinden im Vergleich' if len(rs) > 1 else f'Strompreis in {rs[0]["name"]}') for z, rs in PLZ_PAGES.items()}, ensure_ascii=False)};
 const q=document.getElementById('q'),r=document.getElementById('r');q.addEventListener('input',()=>{{const t=q.value.trim().toLowerCase();r.innerHTML='';if(t.length<2)return;if(Z[t]){{const l=document.createElement('li'),a=document.createElement('a');a.href='{BASE}/plz/'+t+'/';a.textContent='PLZ '+t+': '+Z[t];a.style.fontWeight='700';l.appendChild(a);r.appendChild(l)}}I.filter(i=>(i[0]+' '+i[3]).toLowerCase().includes(t)).slice(0,30).forEach(i=>{{const l=document.createElement('li'),a=document.createElement('a');a.href='{BASE}/gemeinde/'+i[2]+'/';a.textContent=i[0]+' ('+i[1]+')';l.appendChild(a);r.appendChild(l)}})}})</script>"""
 pages["index.html"] = page(f"Strompreislupe: Strompreise {CUR} aller Schweizer Gemeinden", f"Strompreis pro Gemeinde {CUR}: offizielle ElCom-Tarife für {N} Schweizer Gemeinden, mit Vergleich, Verlauf und Stromkosten-Rechner. Median {fmt(CH_MED)} Rp./kWh.", body, "")
+
+# ---------- hourly spot prices ("günstigste Stunden") ----------
+SPOT_PATH = os.path.join(HERE, "data", "spot.json")
+if os.path.exists(SPOT_PATH):
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Europe/Zurich")
+    SP = json.load(open(SPOT_PATH))
+    WD = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+    MON = ["Jan.", "Feb.", "März", "April", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."]
+    days = {}
+    for ts, p in SP["points"]:
+        t = dt.datetime.fromtimestamp(ts, TZ)
+        days.setdefault(t.date(), []).append((t, ts, p / 10))  # EUR/MWh -> EUR-cent/kWh
+    built = dt.datetime.fromtimestamp(SP["fetched"], TZ)
+    days = {d: v for d, v in sorted(days.items()) if d >= built.date() and len(v) >= 23}
+    def spot_day(d, hrs):
+        W, H, PL, PB, PT = 720, 230, 40, 26, 14
+        vals = [p for _, _, p in hrs]
+        lo, hi = min(min(vals), 0), max(vals)
+        rng = (hi - lo) or 1
+        bw = (W - PL - 8) / len(hrs)
+        y = lambda v: PT + (H - PT - PB) * (1 - (v - lo) / rng)
+        best = min(range(len(hrs) - 2), key=lambda i: sum(hrs[j][2] for j in range(i, i + 3)))
+        cheap = set(range(best, best + 3))
+        bars = "".join(
+            f'<rect class="hb" data-s="{ts}" x="{PL + i * bw + 1:.1f}" y="{min(y(p), y(0)):.1f}" width="{bw - 2:.1f}" height="{abs(y(p) - y(0)) + .5:.1f}" fill="{"var(--ac)" if i in cheap else "var(--line)"}"><title>{t:%H}–{(t + dt.timedelta(hours=1)):%H} Uhr: {fmt1(p)} ct/kWh</title></rect>'
+            + (f'<text x="{PL + i * bw + bw / 2:.1f}" y="{H - 8}" font-size="11" text-anchor="middle" fill="var(--mut)">{t:%H}</text>' if i % 3 == 0 else "")
+            for i, (t, ts, p) in enumerate(hrs))
+        grid = "".join(f'<line x1="{PL}" x2="{W}" y1="{y(v):.1f}" y2="{y(v):.1f}" stroke="var(--line)" stroke-width=".5"/><text x="{PL - 6}" y="{y(v) + 4:.1f}" font-size="11" text-anchor="end" fill="var(--mut)">{v:.0f}</text>' for v in {round(lo), round((lo + hi) / 2), round(hi)})
+        svg = f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Börsenstrompreis pro Stunde am {d.day}. {MON[d.month - 1]}" style="width:100%;height:auto">{grid}{bars}</svg>'
+        b0, b2 = hrs[best][0], hrs[best + 2][0] + dt.timedelta(hours=1)
+        avg = statistics.mean(vals)
+        top = sorted(hrs, key=lambda h: h[2])[:5]
+        label = f"{WD[d.weekday()]}, {d.day}. {MON[d.month - 1]} {d.year}"
+        return f"""<h2>{label}</h2>
+<div class="tiles"><div class="tile"><div class="k">Günstigstes 3-Stunden-Fenster</div><div class="v">{b0:%H}–{b2:%H} Uhr</div><div class="s">Ø {fmt1(statistics.mean(h[2] for h in hrs[best:best + 3]))} ct/kWh</div></div>
+<div class="tile"><div class="k">Tagesdurchschnitt</div><div class="v">{fmt1(avg)}</div><div class="s">ct/kWh</div></div>
+<div class="tile"><div class="k">Tiefster / höchster Preis</div><div class="v">{fmt1(min(vals))} / {fmt1(max(vals))}</div><div class="s">ct/kWh</div></div></div>
+<div class="card" style="padding:1rem">{svg}<p class="note" style="margin:.4rem 0 0">Farbig: günstigstes 3-Stunden-Fenster; Umriss: aktuelle Stunde. Preise in Euro-Cent pro kWh, stundengenau.</p></div>
+<p>Die fünf günstigsten Stunden: {", ".join(f"<b>{t:%H}–{(t + dt.timedelta(hours=1)):%H} Uhr</b> ({fmt1(p)})" for t, _, p in sorted(top, key=lambda h: h[0]))}.</p>"""
+    if days:
+        parts = "".join(spot_day(d, h) for d, h in days.items())
+        body = f"""<div class="crumb"><a href="{BASE}/">Schweiz</a> › Günstigste Stunden</div><h1>Günstigste Stromstunden heute und morgen</h1>
+<p class="mut" style="font-size:1.1rem;margin-top:0">Wann ist Strom an der Börse am günstigsten? Der Stundenpreis für die Schweiz (Day-Ahead) zeigt, wann sich Waschmaschine, Wärmepumpe, Boiler oder Elektroauto am besten einschalten lassen.</p>
+<div class="card" style="padding:1rem"><b>Wichtig:</b> Das ist der Börsenpreis (Grosshandel), nicht Ihr Tarif. Die meisten Haushalte haben einen festen Hoch-/Niedertarif und zahlen dadurch nicht stündlich wechselnde Preise. Der Börsenpreis hilft Ihnen vor allem mit einem dynamischen Stromtarif, einer eigenen Solaranlage oder wenn Sie Verbrauch bewusst in günstige Zeiten legen wollen. Er ist ein Richtwert für das Preisgefüge, keine Garantie.</div>
+<p style="margin:1rem 0 0"><a href="{BASE}/"><b>Was zahlen Sie wirklich?</b> Den offiziellen Strompreis Ihrer Gemeinde finden Sie mit Postleitzahl oder Gemeindename →</a></p>
+{parts}
+<p class="note">Stand der Daten: {built:%d.%m.%Y %H:%M} Uhr. Die Preise für morgen erscheinen täglich am frühen Nachmittag; diese Seite wird einmal täglich aktualisiert. Zeiten in Schweizer Zeit.</p>
+<h2>Fragen und Antworten</h2>
+<details><summary>Warum sind die Preise mal sehr tief, mal hoch?</summary><p>Der Börsenpreis folgt Angebot und Nachfrage. Mittags drückt viel Solarstrom den Preis, am frühen Abend und am Morgen ist die Nachfrage hoch.</p></details>
+<details><summary>Spare ich damit wirklich Geld?</summary><p>Nur wenn Ihr Tarif an die Börse gekoppelt ist. Bei einem normalen Tarif ändert sich Ihr Preis nicht stündlich. Dann hilft die Verschiebung Ihnen finanziell nicht, sie entlastet aber das Netz.</p></details>
+<details><summary>Woher stammen die Daten?</summary><p>Energy-Charts (Fraunhofer ISE), Lizenz CC BY 4.0, Daten von ENTSO-E und Bundesnetzagentur | SMARD.de. Die Preise sind Day-Ahead-Preise der Gebotszone Schweiz in Euro. Diese Seite hat keine Verbindung zu den Datenanbietern.</p></details>
+<p><a href="{BASE}/">→ Zurück zu den Strompreisen aller Gemeinden</a></p>
+<script>(function(){{var n=Date.now()/1000;document.querySelectorAll('.hb').forEach(function(r){{var s=+r.dataset.s;if(n>=s&&n<s+3600){{r.setAttribute('stroke','var(--fg)');r.setAttribute('stroke-width','2')}}}})}})()</script>"""
+        pages["guenstigste-stunden/index.html"] = page("Günstigste Stromstunden heute und morgen (Börsenpreis Schweiz)", "Stündlicher Strompreis an der Börse für die Schweiz, heute und morgen: günstigstes 3-Stunden-Fenster für Waschmaschine, Wärmepumpe und E-Auto.", body, "guenstigste-stunden/")
+
+spot_link = f'<p style="margin:1.2rem 0 0"><a href="{BASE}/guenstigste-stunden/"><b>Neu:</b> Wann ist Strom heute und morgen am günstigsten? →</a></p>' if "guenstigste-stunden/index.html" in pages else ""
+pages["index.html"] = pages["index.html"].replace("<!--SPOTLINK-->", spot_link)
 
 # ---------- write ----------
 if os.path.isdir(OUT): shutil.rmtree(OUT)

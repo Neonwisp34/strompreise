@@ -1,7 +1,7 @@
 name: refresh-data
 on:
   schedule:
-    - cron: "17 4 * * 1"   # weekly, Monday 04:17 UTC (ElCom publishes new tariffs yearly, early September)
+    - cron: "30 12 * * *"   # daily 12:30 UTC: day-ahead spot prices for tomorrow are out by then (13:00 CET / 14:00 CEST publication); ElCom tariffs only change yearly, the fetch is cheap
   workflow_dispatch: {}
 permissions:
   contents: write
@@ -14,6 +14,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: python fetch.py
+      - run: python fetch_spot.py
       - run: python build.py
       - name: Commit if changed
         run: |
