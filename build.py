@@ -170,6 +170,15 @@ def op_link(o):
 
 COLORS = {"energy": "#b8102a", "grid": "#3b3f46", "meter": "#9aa0a8", "charge": "#d9a441", "aid": "#5b8c6a"}
 
+# ---------- PLZ index (one page per postcode; single-municipality pages get their own neighbour-postcode content) ----------
+plz_map = {}
+for r in rec.values():
+    for z in r["plz"]: plz_map.setdefault(z, []).append(r)
+PLZ_PAGES = {z: sorted(rs, key=lambda x: x["cur"]["total"]) for z, rs in plz_map.items()}
+PLZ_SORTED = sorted(plz_map)
+LEG_SRC = ('<a href="https://www.energiezukunft.eu/buergerenergie/einfache-regeln-netzentgeltrabatte-und-neu-gewonnene-freiheiten" rel="nofollow noopener">Energiezukunft</a>, '
+           '<a href="https://www.energonia.ch/beitrag/lokale-elektrizitaetsgemeinschaften/" rel="nofollow noopener">Energonia</a>')
+
 # ---------- municipality pages ----------
 pages = {}
 for r in rec.values():
@@ -223,22 +232,41 @@ for r in rec.values():
     # similar municipalities (closest prices in same canton)
     sim = sorted((x for x in bycanton[r["canton"]] if x["id"] != r["id"]), key=lambda x: abs(x["cur"]["total"] - price))[:8]
     simh = "".join(f'<li><a href="{BASE}/gemeinde/{x["slug"]}/">{esc(x["name"])}<span>{fmt(x["cur"]["total"])}</span></a></li>' for x in sim)
-    plz = ", ".join(r["plz"][:6])
+    plz = ", ".join(f'<a href="{BASE}/plz/{z}/">{z}</a>' if z in PLZ_PAGES else z for z in sorted(r["plz"])[:12]) + (f" … ({len(r['plz'])} insgesamt)" if len(r["plz"]) > 12 else "")
     everyday = [("Waschmaschine, 1 Ladung", 1.0, "ca. 1 kWh"), ("Backofen, 1 Stunde", 2.0, "ca. 2 kWh"), ("Elektroauto, 100 km", 18.0, "ca. 18 kWh")]
     def money(v): return f"CHF {chf2(v)}" if v >= 1 else f"{round(v * 100)} Rp."
     evh = "".join(f'<div class="tile"><div class="k">{a}</div><div class="v">{money(price * kw / 100)}</div><div class="s">{b}</div></div>' for a, kw, b in everyday)
     presets = [("Wohnung, 1–2 Personen", 1600), ("Wohnung, Familie", 2500), ("Haus (H4)", 4500), ("Haus mit Wärmepumpe", 9000)]
     chips = "".join(f'<button type="button" data-v="{v}"{" class=on" if v == KWH else ""}>{lab}</button>' for lab, v in presets)
+    g = c["grid"]
+    leg = ""
+    if g > 0.5:
+        d40, d20 = g * 0.40, g * 0.20
+        ex = d40 * 0.30 * KWH / 100
+        leg = f"""<h2>Lokale Elektrizitätsgemeinschaft (LEG): Wie viel Netzkosten lassen sich sparen?</h2>
+<div class="card"><p style="margin-top:0">Seit dem 1. Januar 2026 dürfen Nachbarn in einer <b>Lokalen Elektrizitätsgemeinschaft (LEG)</b> selbst erzeugten Strom, zum Beispiel von Solardächern, über das normale Netz untereinander teilen. Für diesen intern gelieferten Strom ist der Netznutzungstarif reduziert: um <b>40%</b>, oder um <b>20%</b>, wenn der Strom über einen Transformator in eine andere Netzebene fliesst.</p>
+<div class="tiles"><div class="tile"><div class="k">Netznutzung in {esc(r['name'])}</div><div class="v">{fmt(g)}</div><div class="s">Rp./kWh (ElCom, H4)</div></div>
+<div class="tile"><div class="k">Obergrenze bei 40% Rabatt</div><div class="v">{fmt(d40)}</div><div class="s">Rp./kWh weniger</div></div>
+<div class="tile"><div class="k">Obergrenze bei 20% Rabatt</div><div class="v">{fmt(d20)}</div><div class="s">Rp./kWh weniger</div></div></div>
+<p><b>Beispielrechnung:</b> Stammen 30% von 4'500 kWh Jahresverbrauch aus der Gemeinschaft, beträgt die Netzkosten-Ersparnis bei 40% Rabatt <b>höchstens CHF {chf(ex)} pro Jahr</b>. Die Zahl ist eine Obergrenze, keine Prognose.</p>
+<p class="note" style="margin-bottom:.3rem"><b>Was diese Zahlen nicht wissen:</b></p>
+<ul class="note" style="margin-top:0"><li>Der Rabatt gilt nur für Strom, der in der Gemeinschaft erzeugt und gleichzeitig dort verbraucht wird, nicht für den ganzen Verbrauch.</li>
+<li>Alle Mitglieder müssen im selben Gemeindegebiet, beim selben Netzbetreiber und auf derselben Netzebene sein. Ob 40% oder 20% gelten, hängt vom Netz Ihrer Strasse ab.</li>
+<li>Es ist nicht eindeutig geregelt, ob der Rabatt auch auf fixe Grund- und Leistungspreise zählt. Wenn nicht, ist die tatsächliche Ersparnis kleiner als hier gezeigt.</li>
+<li>Den Preis für die Energie selbst legen die Mitglieder fest. Er ist hier nicht berücksichtigt.</li></ul>
+<p class="note" style="margin-bottom:0">Berechnet als Netznutzung × 40% bzw. 20%. Rechtsgrundlage: Art. 17d ff. StromVG, Art. 19e ff. StromVV. Keine Rechtsberatung; verbindlich ist die Auskunft Ihres Netzbetreibers. Weitere Informationen: {LEG_SRC}.</p></div>"""
     why_cheap = "günstiger" if dpct < 0 else "teurer"
     faq = [
         (f"Wie hoch ist der Strompreis in {r['name']}?", f"{pre.capitalize()}{fmt(price)} Rp./kWh im Jahr {CUR} (ElCom-Kategorie H4). Für 4'500 kWh pro Jahr sind das rund CHF {chf(ann)}."),
         (f"Wie viel kostet Strom in {r['name']} pro Monat?", f"Bei 4'500 kWh Jahresverbrauch rund CHF {chf(mon)} pro Monat. Mit dem Rechner oben können Sie Ihren eigenen Verbrauch einsetzen."),
         (f"Ist Strom in {r['name']} {why_cheap} als im Schweizer Durchschnitt?", f"Der Preis liegt {vs} dem Schweizer Median von {fmt(CH_MED)} Rp./kWh und {'über' if price > cm else ('unter' if price < cm else 'genau auf Höhe')} dem Median im Kanton {r['canton']} ({fmt(cm)} Rp./kWh)."),
     ]
+    if leg:
+        faq.append((f"Was bringt eine Lokale Elektrizitätsgemeinschaft (LEG) in {r['name']}?", f"Für intern gelieferten Strom ist der Netznutzungstarif um 40% (bei Transformation 20%) reduziert. Bei einer Netznutzung von {fmt(g)} Rp./kWh sind das höchstens {fmt(g * 0.4)} Rp./kWh, und nur auf dem Anteil, der in der Gemeinschaft erzeugt und gleichzeitig verbraucht wird."))
     faqh = "".join(f"<details><summary>{esc(q)}</summary><p>{a}</p></details>" for q, a in faq)
     body = f"""<div class="crumb"><a href="{BASE}/">Schweiz</a> › <a href="{BASE}/kanton/{slug(r['canton'])}/">{esc(r['canton'])}</a> › {esc(r['name'])}</div>
 <h1>Strompreis in {esc(r['name'])} {CUR}</h1>
-<p class="mut">Kanton {esc(r['canton'])}{' · PLZ ' + esc(plz) if plz else ''}</p>
+<p class="mut">Kanton {esc(r['canton'])}{' · PLZ ' + plz if plz else ''}</p>
 <section class="hero"><div class="card"><div class="price">{pre}{fmt(price)} <small>Rp./kWh</small></div>
 <span class="badge {cls}">{verdict}</span>
 <p style="margin:.4rem 0 0">Rund <b>CHF {chf(mon)} pro Monat</b> oder <b>CHF {chf(ann)} pro Jahr</b> für einen Haushalt mit 4'500 kWh. Der Preis liegt {vs} dem Schweizer Median.</p>{multi}</div>
@@ -253,16 +281,47 @@ for r in rec.values():
 <h2>Warum ist Strom in {esc(r['name'])} {why_cheap}?</h2>
 <div class="card"><div class="stack" role="img" aria-label="Zusammensetzung des Preises">{stack}</div><div class="leg">{legend}</div><p style="margin:.2rem 0 0">{why}</p>
 <table style="margin-top:1rem"><tr><th>Bestandteil</th><th class="n">{esc(r['name'])}</th><th class="n">CH-Median</th></tr>{brows}</table></div>
-<h2>Alltag in Franken</h2><div class="tiles">{evh}</div><p class="note">Grobe Richtwerte für typische Geräte, berechnet mit dem Preis von {esc(r['name'])}.</p>
+{leg}<h2>Alltag in Franken</h2><div class="tiles">{evh}</div><p class="note">Grobe Richtwerte für typische Geräte, berechnet mit dem Preis von {esc(r['name'])}.</p>
 <h2>Stromanbieter in {esc(r['name'])}</h2><div class="card"><table><tr><th>Netzbetreiber</th><th>Produkt</th><th class="n">Rp./kWh</th></tr>{ops}</table></div>
 <h2>Ähnliche Preise im Kanton {esc(r['canton'])}</h2><ul class="grid">{simh}</ul>
 <p><a href="{BASE}/kanton/{slug(r['canton'])}/">Alle Gemeinden im Kanton {esc(r['canton'])} ansehen</a></p>
 <h2>Häufige Fragen</h2>{faqh}{CALC_JS}"""
-    title = f"Strompreis {r['name']} {CUR}: {pre}{fmt(price)} Rp./kWh"
+    title = f"Strompreis {r['name']} {CUR}: {pre}{fmt(price)} Rp./kWh" + (f" (PLZ {', '.join(sorted(r['plz']))})" if 1 <= len(r["plz"]) <= 2 else "")
     desc = f"Strompreis {r['name']} ({r['canton']}) {CUR}: {pre}{fmt(price)} Rp./kWh, rund CHF {chf(mon)} pro Monat. {verdict}. Rechner, Verlauf und Preisbestandteile."
     schemas = [{"@context": "https://schema.org", "@type": "Dataset", "name": f"Strompreis {r['name']} {CUR}", "description": desc, "creator": {"@type": "Organization", "name": "ElCom"}, "spatialCoverage": f"{r['name']}, {r['canton']}, Schweiz"},
                {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": re.sub(r"<[^>]+>", "", a)}} for q, a in faq]}]
     pages[f"gemeinde/{r['slug']}/index.html"] = page(title, desc, body, f"gemeinde/{r['slug']}/", schemas)
+
+# ---------- PLZ pages ----------
+for z, rs in PLZ_PAGES.items():
+    if len(rs) == 1:
+        x = rs[0]; pr = x["cur"]["total"]; dp = (pr / CH_MED - 1) * 100
+        pre1 = "ab " if len(x["all"]) > 1 else ""
+        vd = "Im Schweizer Mittelfeld" if abs(dp) < 5 else (f"Günstiger als {round(100 * sum(1 for q in allp if q > pr + 1e-9) / N)}% der Schweizer Gemeinden" if dp < 0 else f"Teurer als {round(100 * sum(1 for q in allp if q < pr - 1e-9) / N)}% der Schweizer Gemeinden")
+        vc = "b-mid" if abs(dp) < 5 else ("b-good" if dp < 0 else "b-bad")
+        i0 = PLZ_SORTED.index(z)
+        near = [q for q in PLZ_SORTED[max(0, i0 - 4): i0 + 5] if q != z][:8]
+        nrows = "".join(f'<tr><td><a href="{BASE}/plz/{q}/">{q}</a></td><td>{", ".join(esc(y["name"]) for y in plz_map[q][:3])}</td><td class="n">{fmt(min(y["cur"]["total"] for y in plz_map[q]))}</td></tr>' for q in near)
+        others = ", ".join(f'<a href="{BASE}/plz/{q}/">{q}</a>' for q in sorted(x["plz"]) if q != z)
+        oth = f'<p>Weitere Postleitzahlen der Gemeinde {esc(x["name"])}: {others}.</p>' if others else ""
+        body = f"""<div class="crumb"><a href="{BASE}/">Schweiz</a> › <a href="{BASE}/kanton/{slug(x['canton'])}/">{esc(x['canton'])}</a> › PLZ {z}</div><h1>Strompreis PLZ {z}</h1>
+<p class="mut">Gemeinde {esc(x['name'])}, Kanton {esc(x['canton'])}</p>
+<div class="card"><div class="price">{pre1}{fmt(pr)} <small>Rp./kWh</small></div><span class="badge {vc}">{vd}</span>
+<p style="margin:.4rem 0 0">Die Postleitzahl {z} gehört zur Gemeinde <b>{esc(x['name'])}</b>. Für einen Haushalt mit 4'500 kWh sind das rund <b>CHF {chf(pr * KWH / 1200)} pro Monat</b> oder <b>CHF {chf(pr * KWH / 100)} pro Jahr</b>. Schweizer Median: {fmt(CH_MED)} Rp./kWh.</p>
+<p style="margin-bottom:0"><a href="{BASE}/gemeinde/{x['slug']}/">Alle Details zu {esc(x['name'])}: Rechner, Verlauf, Preisbestandteile, Energiegemeinschaft (LEG)</a></p></div>
+{oth}<h2>Postleitzahlen in der Nähe</h2><div class="card"><table><tr><th>PLZ</th><th>Gemeinde</th><th class="n">Rp./kWh</th></tr>{nrows}</table></div>
+<p class="note">Der Strompreis gilt pro Gemeinde und Netzbetreiber, nicht pro Postleitzahl. Die Zuordnung stammt aus den Verzeichnisdaten des Bundes; eine PLZ kann eine Gemeinde nur teilweise abdecken. Tarif {CUR}, ElCom-Kategorie H4.</p>"""
+        pages[f"plz/{z}/index.html"] = page(f"Strompreis PLZ {z} ({x['name']}) {CUR}: {pre1}{fmt(pr)} Rp./kWh", f"Strompreis für die Postleitzahl {z} ({x['name']}, {x['canton']}): {pre1}{fmt(pr)} Rp./kWh im Jahr {CUR}, rund CHF {chf(pr * KWH / 1200)} pro Monat. {vd}.", body, f"plz/{z}/")
+        continue
+    lo, hi = rs[0], rs[-1]
+    flat = r2(lo["cur"]["total"]) == r2(hi["cur"]["total"])
+    rows = "".join(f'<tr><td><a href="{BASE}/gemeinde/{x["slug"]}/">{esc(x["name"])}</a></td><td>{esc(x["canton"])}</td><td>{op_link(x["cur"])}</td><td class="n">{fmt(x["cur"]["total"])}</td><td class="n">CHF {chf(x["cur"]["total"] * KWH / 100)}</td></tr>' for x in rs)
+    spread = "In allen diesen Gemeinden gilt derselbe Preis." if flat else f"Der günstigste Preis liegt bei <b>{fmt(lo['cur']['total'])} Rp./kWh</b> ({esc(lo['name'])}), der höchste bei <b>{fmt(hi['cur']['total'])} Rp./kWh</b> ({esc(hi['name'])}): ein Unterschied von {fmt(hi['cur']['total'] - lo['cur']['total'])} Rp./kWh, bei 4'500 kWh pro Jahr rund CHF {chf((hi['cur']['total'] - lo['cur']['total']) * KWH / 100)}."
+    body = f"""<div class="crumb"><a href="{BASE}/">Schweiz</a> › PLZ {z}</div><h1>Strompreis PLZ {z}</h1>
+<p>Die Postleitzahl {z} überschneidet sich mit {len(rs)} Gemeinden. Weil der Strompreis pro Gemeinde (und Netzbetreiber) gilt und nicht pro Postleitzahl, kann der Preis innerhalb derselben PLZ unterschiedlich sein. {spread}</p>
+<div class="card"><table><tr><th>Gemeinde</th><th>Kanton</th><th>Netzbetreiber</th><th class="n">Rp./kWh</th><th class="n">pro Jahr*</th></tr>{rows}</table><p class="note" style="margin-bottom:0">*Bei 4'500 kWh Jahresverbrauch (ElCom-Kategorie H4), Tarif {CUR}. Welche Gemeinde für Ihre Adresse gilt, steht auf Ihrer Stromrechnung oder im Gemeindeverzeichnis.</p></div>
+<p class="note">Die Zuordnung der Postleitzahl zu Gemeinden stammt aus den Verzeichnisdaten des Bundes. Eine PLZ kann eine Gemeinde nur teilweise abdecken.</p>"""
+    pages[f"plz/{z}/index.html"] = page(f"Strompreis PLZ {z} {CUR}: {len(rs)} Gemeinden im Vergleich", f"Strompreis für die Postleitzahl {z}: {len(rs)} Gemeinden, {fmt(lo['cur']['total'])} bis {fmt(hi['cur']['total'])} Rp./kWh ({CUR}). Preise und Netzbetreiber im Vergleich.", body, f"plz/{z}/")
 
 # ---------- canton pages ----------
 def rank_list(items, rk=None, limit=None):
@@ -301,7 +360,8 @@ body = f"""<h1>Was kostet Strom in Ihrer Gemeinde?</h1>
 <div class="hero" style="margin-top:2rem"><div><h2 style="margin-top:0">Die günstigsten Preise {CUR}</h2><div class="card">{rank_list(srt, rank_ch, 12)}</div></div>
 <div><h2 style="margin-top:0">Die höchsten Preise {CUR}</h2><div class="card">{rank_list(srt[::-1], {x['id']: rank_ch[x['id']] for x in srt}, 12)}</div></div></div>
 <script>const I={json.dumps([[x['name'], x['canton'], x['slug'], ' '.join(x['plz'])] for x in sorted(rec.values(), key=lambda x: x['name'])], ensure_ascii=False)};
-const q=document.getElementById('q'),r=document.getElementById('r');q.addEventListener('input',()=>{{const t=q.value.trim().toLowerCase();r.innerHTML='';if(t.length<2)return;I.filter(i=>(i[0]+' '+i[3]).toLowerCase().includes(t)).slice(0,30).forEach(i=>{{const l=document.createElement('li'),a=document.createElement('a');a.href='{BASE}/gemeinde/'+i[2]+'/';a.textContent=i[0]+' ('+i[1]+')';l.appendChild(a);r.appendChild(l)}})}})</script>"""
+const Z={json.dumps({z: (f'{len(rs)} Gemeinden im Vergleich' if len(rs) > 1 else f'Strompreis in {rs[0]["name"]}') for z, rs in PLZ_PAGES.items()}, ensure_ascii=False)};
+const q=document.getElementById('q'),r=document.getElementById('r');q.addEventListener('input',()=>{{const t=q.value.trim().toLowerCase();r.innerHTML='';if(t.length<2)return;if(Z[t]){{const l=document.createElement('li'),a=document.createElement('a');a.href='{BASE}/plz/'+t+'/';a.textContent='PLZ '+t+': '+Z[t];a.style.fontWeight='700';l.appendChild(a);r.appendChild(l)}}I.filter(i=>(i[0]+' '+i[3]).toLowerCase().includes(t)).slice(0,30).forEach(i=>{{const l=document.createElement('li'),a=document.createElement('a');a.href='{BASE}/gemeinde/'+i[2]+'/';a.textContent=i[0]+' ('+i[1]+')';l.appendChild(a);r.appendChild(l)}})}})</script>"""
 pages["index.html"] = page(f"Strompreislupe: Strompreise {CUR} aller Schweizer Gemeinden", f"Strompreis pro Gemeinde {CUR}: offizielle ElCom-Tarife für {N} Schweizer Gemeinden, mit Vergleich, Verlauf und Stromkosten-Rechner. Median {fmt(CH_MED)} Rp./kWh.", body, "")
 
 # ---------- write ----------
